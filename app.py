@@ -246,7 +246,7 @@ def display_footer():
     st.markdown(
         """
         <div style='text-align: center; color: #fff; font-size: 14px; padding: 10px 0;'>
-            Youtech & Associates, Inc © 2025 All Rights Reserved | Created by <strong><a href="https://www.youtechagency.com/">Dhruv Pandya</a></strong>
+        © 2025 Youtech & Associates, Inc. | Built with ❤️ by Dhruv Pandya | <a href="https://www.youtechagency.com/" target="_blank">Youtech Agency</a>
         </div>
         """, 
         unsafe_allow_html=True
