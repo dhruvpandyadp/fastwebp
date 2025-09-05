@@ -1,4 +1,4 @@
-# 🖼️ Fastwebp - Image Compressor & WebP Converter
+# 🖼️ FastWebP - Image Compressor & WebP Converter
 
 [![Python](https://img.shields.io/badge/Python-3.7%2B-blue)](https://www.python.org/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.0%2B-red)](https://streamlit.io/)
@@ -76,7 +76,7 @@ A powerful and user-friendly web application for **batch processing** multiple i
 3. **Preview** the uploaded image thumbnail
 4. **Process** and download optimized versions
 
-### Batch Processing Mode (Recommended)
+### Batch Processing Mode 
 1. **Upload Multiple Images** - Select up to 50 images at once
 2. **Preview Uploads** - View thumbnail grid of all uploaded files
 3. **Configure Settings** - Adjust compression, transparency, and responsive sizes
