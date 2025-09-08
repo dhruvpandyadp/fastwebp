@@ -21,8 +21,6 @@ def hide_streamlit_ui():
     """Hide Streamlit UI elements using CSS"""
     hide_streamlit_style = """
     <style>    
-    /* Hide footer */
-    footer {visibility: hidden;}
     
     /* Hide header */
     header {visibility: hidden;}
