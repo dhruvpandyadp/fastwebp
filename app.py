@@ -1,4 +1,3 @@
-
 import streamlit as st
 import io
 from PIL import Image
@@ -64,7 +63,6 @@ def prepare_image_for_webp(image, preserve_transparency=True):
             background = Image.new('RGB', image.size, (255, 255, 255))
             background.paste(image, mask=image.split()[-1])  # Use alpha channel as mask
             return background
-
     elif original_mode == "P":
         # Handle palette images
         if 'transparency' in image.info:
@@ -81,7 +79,6 @@ def prepare_image_for_webp(image, preserve_transparency=True):
         else:
             # No transparency, convert to RGB
             return image.convert('RGB')
-
     elif original_mode in ("L", "LA"):
         # Grayscale images
         if original_mode == "LA" and preserve_transparency:
@@ -90,7 +87,6 @@ def prepare_image_for_webp(image, preserve_transparency=True):
         else:
             # Convert to RGB
             return image.convert('RGB')
-
     else:
         # RGB, CMYK, etc. - convert to RGB if needed
         if original_mode != "RGB":
@@ -112,7 +108,6 @@ def compress_image(image, target_size_kb=500, quality=85, max_width=1920, max_he
     Returns:
         tuple: (compressed_image_bytes, final_quality, final_dimensions, has_transparency)
     """
-
     # Check if original image has transparency
     has_transparency = image.mode in ("RGBA", "LA") or (image.mode == "P" and 'transparency' in image.info)
 
@@ -140,7 +135,6 @@ def compress_image(image, target_size_kb=500, quality=85, max_width=1920, max_he
 
         # Save image with current quality
         img_buffer = BytesIO()
-
         # Save with appropriate options for transparency
         save_options = {
             'format': 'WebP',
@@ -176,14 +170,12 @@ def compress_image(image, target_size_kb=500, quality=85, max_width=1920, max_he
             resized_image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
 
             img_buffer = BytesIO()
-
             # Use the same save options as before
             save_options = {
                 'format': 'WebP',
                 'quality': best_quality,
                 'optimize': True
             }
-
             resized_image.save(img_buffer, **save_options)
             img_bytes = img_buffer.getvalue()
 
@@ -212,31 +204,44 @@ def create_mobile_version(image, max_width=768, preserve_transparency=True):
         image = image.resize((max_width, new_height), Image.Resampling.LANCZOS)
 
     img_buffer = BytesIO()
-
     # Save with appropriate options for transparency
     save_options = {
         'format': 'WebP',
         'quality': 80,
         'optimize': True
     }
-
     image.save(img_buffer, **save_options)
+
     return img_buffer.getvalue(), image.size, has_transparency
 
-def create_zip_file(processed_images):
-    """Create a ZIP file containing all processed images"""
+def create_zip_file(processed_images, include_mobile=True):
+    """Create a ZIP file containing processed images"""
     zip_buffer = BytesIO()
-
+    
     with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
         for filename, desktop_data, mobile_data in processed_images:
-            # Add desktop version
+            # Always add desktop version
             desktop_filename = f"desktop/{filename}_desktop.webp"
             zip_file.writestr(desktop_filename, desktop_data)
+            
+            # Add mobile version only if requested
+            if include_mobile and mobile_data:
+                mobile_filename = f"mobile/{filename}_mobile.webp"
+                zip_file.writestr(mobile_filename, mobile_data)
+    
+    zip_buffer.seek(0)
+    return zip_buffer.getvalue()
 
-            # Add mobile version
-            mobile_filename = f"mobile/{filename}_mobile.webp"
-            zip_file.writestr(mobile_filename, mobile_data)
-
+def create_mobile_only_zip(processed_images):
+    """Create a ZIP file containing only mobile versions"""
+    zip_buffer = BytesIO()
+    
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        for filename, desktop_data, mobile_data in processed_images:
+            if mobile_data:  # Only add if mobile version exists
+                mobile_filename = f"{filename}_mobile.webp"
+                zip_file.writestr(mobile_filename, mobile_data)
+    
     zip_buffer.seek(0)
     return zip_buffer.getvalue()
 
@@ -245,10 +250,10 @@ def display_footer():
     st.markdown("---")
     st.markdown(
         """
-        <div style='text-align: center; color: #fff; font-size: 14px; padding: 10px 0;'>
-        © 2025 Youtech & Associates, Inc. | Built with ❤️ by Dhruv Pandya | <a href="https://www.youtechagency.com/" target="_blank">Youtech Agency</a>
-        </div>
-        """, 
+        <div style='text-align: center; color: #666; padding: 20px;'>
+        <p>© 2025 Youtech & Associates, Inc. | Built with ❤️ by Dhruv Pandya | <a href="https://www.youtechagency.com/" target="_blank">Youtech Agency</a>
+       </p> </div>
+        """,
         unsafe_allow_html=True
     )
 
@@ -282,6 +287,14 @@ def main():
         help="Starting quality for compression (will be optimized automatically)"
     )
 
+    # NEW: Mobile compression option
+    st.sidebar.subheader("📱 Mobile Compression")
+    enable_mobile = st.sidebar.checkbox(
+        "Enable Mobile Version", 
+        value=False,  # Default to desktop only
+        help="Create mobile-optimized versions of images (smaller file sizes for mobile devices)"
+    )
+
     # Transparency handling option
     st.sidebar.subheader("🎭 Transparency Options")
     preserve_transparency = st.sidebar.checkbox(
@@ -297,7 +310,7 @@ def main():
             help="Color to use for transparent areas when transparency is not preserved"
         )
 
-    st.sidebar.subheader("📱 Responsive Sizes")
+    st.sidebar.subheader("🖥️ Desktop Sizes")
     desktop_width = st.sidebar.number_input(
         "Desktop max width (px)", 
         min_value=800, 
@@ -314,13 +327,18 @@ def main():
         step=100
     )
 
-    mobile_width = st.sidebar.number_input(
-        "Mobile max width (px)", 
-        min_value=320, 
-        max_value=1024, 
-        value=768, 
-        step=50
-    )
+    # Mobile settings only shown when mobile is enabled
+    if enable_mobile:
+        st.sidebar.subheader("📱 Mobile Sizes")
+        mobile_width = st.sidebar.number_input(
+            "Mobile max width (px)", 
+            min_value=320, 
+            max_value=1024, 
+            value=768, 
+            step=50
+        )
+    else:
+        mobile_width = 768  # Default value
 
     # Batch processing options
     st.sidebar.subheader("📦 Batch Processing")
@@ -406,6 +424,12 @@ def main():
             avg_size = total_original_size / len(file_details) if file_details else 0
             st.metric("Avg Size", f"{avg_size:.1f} KB")
 
+        # Show compression mode info
+        if enable_mobile:
+            st.info("📱 **Mobile mode enabled** - Both desktop and mobile versions will be created")
+        else:
+            st.info("🖥️ **Desktop mode only** - Only desktop versions will be created")
+
         # Show image previews if enabled
         if show_previews and file_details:
             st.subheader("🖼️ Image Previews")
@@ -424,32 +448,14 @@ def main():
                             # Display thumbnail
                             display_image_small(
                                 file_detail['image'], 
-                                f"{file_detail['name']}\n{file_detail['size_kb']:.1f} KB",
+                                f"{file_detail['name']}\n{file_detail['size_kb']:.1f} KB\n{file_detail['dimensions']}", 
                                 width=preview_size
                             )
-
                             # Show transparency indicator
                             if file_detail['transparency']:
-                                st.caption("🎭 Has transparency")
-                            else:
-                                st.caption("🖼️ No transparency")
+                                st.caption("🎭 Has Transparency")
 
-        # Show file details in expandable section
-        with st.expander("📁 Detailed File Information", expanded=False):
-            for i, file_detail in enumerate(file_details):
-                col1, col2, col3, col4, col5 = st.columns([3, 2, 2, 2, 1])
-                with col1:
-                    st.write(f"**{file_detail['name']}**")
-                with col2:
-                    st.write(f"{file_detail['size_kb']:.1f} KB")
-                with col3:
-                    st.write(file_detail['dimensions'])
-                with col4:
-                    st.write(file_detail['format'])
-                with col5:
-                    st.write("✅" if file_detail['transparency'] else "❌")
-
-        # Batch compress button
+        # BATCH PROCESSING BUTTON
         if st.button("🚀 Compress All Images", type="primary"):
             if not file_details:
                 st.error("No valid images to process.")
@@ -479,17 +485,22 @@ def main():
                         file_detail['image'].copy(), target_size, initial_quality, desktop_width, desktop_height, preserve_transparency
                     )
 
-                    # Create mobile version
-                    mobile_compressed, mobile_dims, mobile_has_transparency = create_mobile_version(
-                        file_detail['image'].copy(), mobile_width, preserve_transparency
-                    )
+                    mobile_compressed = None
+                    mobile_dims = None
+                    mobile_has_transparency = False
+                    mobile_size_kb = 0
+
+                    # Create mobile version only if enabled
+                    if enable_mobile:
+                        mobile_compressed, mobile_dims, mobile_has_transparency = create_mobile_version(
+                            file_detail['image'].copy(), mobile_width, preserve_transparency
+                        )
+                        mobile_size_kb = len(mobile_compressed) / 1024
+                        total_mobile_size += mobile_size_kb
 
                     # Calculate sizes
                     desktop_size_kb = len(desktop_compressed) / 1024
-                    mobile_size_kb = len(mobile_compressed) / 1024
-
                     total_desktop_size += desktop_size_kb
-                    total_mobile_size += mobile_size_kb
 
                     # Store processed image data
                     filename_without_ext = os.path.splitext(file_detail['name'])[0]
@@ -504,7 +515,8 @@ def main():
                     file_detail['desktop_dims'] = desktop_dims
                     file_detail['mobile_dims'] = mobile_dims
                     file_detail['desktop_image'] = Image.open(BytesIO(desktop_compressed))
-                    file_detail['mobile_image'] = Image.open(BytesIO(mobile_compressed))
+                    if mobile_compressed:
+                        file_detail['mobile_image'] = Image.open(BytesIO(mobile_compressed))
                     file_detail['success'] = True
 
                     successful_compressions += 1
@@ -528,7 +540,10 @@ def main():
             total_desktop_size_mb = total_desktop_size / 1024
             total_mobile_size_mb = total_mobile_size / 1024
 
-            col1, col2, col3 = st.columns(3)
+            if enable_mobile:
+                col1, col2, col3 = st.columns(3)
+            else:
+                col1, col2 = st.columns(2)
 
             with col1:
                 st.write("**Original (All Files)**")
@@ -538,49 +553,141 @@ def main():
 
             with col2:
                 st.write("**Desktop Versions**")
-                desktop_reduction = ((total_original_size - total_desktop_size) / total_original_size) * 100
-                st.metric("Total Size", f"{total_desktop_size_mb:.2f} MB", f"-{desktop_reduction:.1f}%")
-                st.metric("Average Size", f"{total_desktop_size/successful_compressions:.1f} KB")
-                st.metric("Format", "WebP")
+                desktop_reduction = ((total_original_size - total_desktop_size) / total_original_size) * 100 if total_original_size > 0 else 0
+                st.metric("Total Size", f"{total_desktop_size_mb:.2f} MB", delta=f"-{desktop_reduction:.1f}%")
+                st.metric("Average Size", f"{total_desktop_size/successful_compressions:.1f} KB" if successful_compressions > 0 else "0 KB")
+                st.metric("Space Saved", f"{(total_original_size - total_desktop_size)/1024:.2f} MB")
 
-            with col3:
-                st.write("**Mobile Versions**")
-                mobile_reduction = ((total_original_size - total_mobile_size) / total_original_size) * 100
-                st.metric("Total Size", f"{total_mobile_size_mb:.2f} MB", f"-{mobile_reduction:.1f}%")
-                st.metric("Average Size", f"{total_mobile_size/successful_compressions:.1f} KB")
-                st.metric("Optimized for", "Mobile devices")
+            if enable_mobile:
+                with col3:
+                    st.write("**Mobile Versions**")
+                    mobile_reduction = ((total_original_size - total_mobile_size) / total_original_size) * 100 if total_original_size > 0 else 0
+                    st.metric("Total Size", f"{total_mobile_size_mb:.2f} MB", delta=f"-{mobile_reduction:.1f}%")
+                    st.metric("Average Size", f"{total_mobile_size/successful_compressions:.1f} KB" if successful_compressions > 0 else "0 KB")
+                    st.metric("Space Saved", f"{(total_original_size - total_mobile_size)/1024:.2f} MB")
 
-            # Show compressed image previews if enabled
-            if show_previews and successful_compressions > 0:
-                st.subheader("🎨 Before & After Previews")
+            # DOWNLOAD BUTTONS
+            st.subheader("📥 Download Results")
+            
+            # Batch Download Options
+            st.write("**Batch Downloads:**")
+            if enable_mobile:
+                # When mobile is enabled, show three download options
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    # Desktop + Mobile ZIP
+                    zip_data = create_zip_file(processed_images, include_mobile=True)
+                    st.download_button(
+                        label="📦 Download All (Desktop + Mobile)",
+                        data=zip_data,
+                        file_name=f"compressed_images_all_{int(time.time())}.zip",
+                        mime="application/zip",
+                        help="Download both desktop and mobile versions in separate folders"
+                    )
+                
+                with col2:
+                    # Desktop Only ZIP
+                    desktop_zip_data = create_zip_file(processed_images, include_mobile=False)
+                    st.download_button(
+                        label="🖥️ Download Desktop Only",
+                        data=desktop_zip_data,
+                        file_name=f"compressed_images_desktop_{int(time.time())}.zip",
+                        mime="application/zip",
+                        help="Download only desktop versions"
+                    )
+                
+                with col3:
+                    # Mobile Only ZIP
+                    mobile_zip_data = create_mobile_only_zip(processed_images)
+                    st.download_button(
+                        label="📱 Download Mobile Only",
+                        data=mobile_zip_data,
+                        file_name=f"compressed_images_mobile_{int(time.time())}.zip",
+                        mime="application/zip",
+                        help="Download only mobile versions"
+                    )
+            else:
+                # When mobile is disabled, show only desktop download
+                desktop_zip_data = create_zip_file(processed_images, include_mobile=False)
+                st.download_button(
+                    label="📦 Download Desktop Images",
+                    data=desktop_zip_data,
+                    file_name=f"compressed_images_desktop_{int(time.time())}.zip",
+                    mime="application/zip",
+                    help="Download compressed desktop versions"
+                )
+
+            # INDIVIDUAL DOWNLOAD SECTION
+            st.write("**Individual Downloads:**")
+            successful_files = [f for f in file_details if f.get('success', False)]
+            
+            if successful_files:
+                # Show individual download options for each image
+                for i, file_detail in enumerate(successful_files):
+                    with st.expander(f"📷 {file_detail['name']} - Individual Downloads"):
+                        filename_without_ext = os.path.splitext(file_detail['name'])[0]
+                        
+                        # Show compression stats
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.metric("Original Size", f"{file_detail['size_kb']:.1f} KB")
+                            st.metric("Desktop Size", f"{file_detail['desktop_size_kb']:.1f} KB")
+                            if enable_mobile and file_detail['mobile_compressed']:
+                                st.metric("Mobile Size", f"{file_detail['mobile_size_kb']:.1f} KB")
+                        
+                        with col2:
+                            desktop_reduction = ((file_detail['size_kb'] - file_detail['desktop_size_kb']) / file_detail['size_kb']) * 100
+                            st.metric("Desktop Reduction", f"{desktop_reduction:.1f}%")
+                            if enable_mobile and file_detail['mobile_compressed']:
+                                mobile_reduction = ((file_detail['size_kb'] - file_detail['mobile_size_kb']) / file_detail['size_kb']) * 100
+                                st.metric("Mobile Reduction", f"{mobile_reduction:.1f}%")
+                        
+                        # Individual download buttons
+                        if enable_mobile and file_detail['mobile_compressed']:
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.download_button(
+                                    label="⬇️ Download Desktop Version",
+                                    data=file_detail['desktop_compressed'],
+                                    file_name=f"{filename_without_ext}_desktop.webp",
+                                    mime="image/webp",
+                                    key=f"desktop_{i}_{int(time.time())}"
+                                )
+                            with col2:
+                                st.download_button(
+                                    label="⬇️ Download Mobile Version",
+                                    data=file_detail['mobile_compressed'],
+                                    file_name=f"{filename_without_ext}_mobile.webp",
+                                    mime="image/webp",
+                                    key=f"mobile_{i}_{int(time.time())}"
+                                )
+                        else:
+                            st.download_button(
+                                label="⬇️ Download Desktop Version",
+                                data=file_detail['desktop_compressed'],
+                                file_name=f"{filename_without_ext}_desktop.webp",
+                                mime="image/webp",
+                                key=f"desktop_{i}_{int(time.time())}"
+                            )
+
+            # RESULTS PREVIEW
+            if show_previews:
+                st.subheader("🖼️ Results Preview")
 
                 # Create tabs for different views
-                tab1, tab2, tab3 = st.tabs(["📱 Mobile Results", "🖥️ Desktop Results", "🔀 Side by Side"])
+                if enable_mobile:
+                    tab1, tab2, tab3 = st.tabs(["🖥️ Desktop Results", "📱 Mobile Results", "🔄 Side-by-Side"])
+                else:
+                    tab1, tab3 = st.tabs(["🖥️ Desktop Results", "🔄 Side-by-Side"])
 
+                # Desktop Results Tab
                 with tab1:
-                    st.write("**Mobile Optimized Versions:**")
+                    st.write("**Desktop Compressed Images:**")
+                    
                     cols_per_row = 4
                     rows = (successful_compressions + cols_per_row - 1) // cols_per_row
-
-                    successful_files = [f for f in file_details if f.get('success', False)]
-                    for row in range(rows):
-                        cols = st.columns(cols_per_row)
-                        for col_idx in range(cols_per_row):
-                            file_idx = row * cols_per_row + col_idx
-                            if file_idx < len(successful_files):
-                                file_detail = successful_files[file_idx]
-                                with cols[col_idx]:
-                                    display_image_small(
-                                        file_detail['mobile_image'],
-                                        f"Mobile: {file_detail['name']}\n{file_detail['mobile_size_kb']:.1f} KB",
-                                        width=preview_size
-                                    )
-
-                with tab2:
-                    st.write("**Desktop Optimized Versions:**")
-                    cols_per_row = 4
-                    rows = (successful_compressions + cols_per_row - 1) // cols_per_row
-
+                    
                     for row in range(rows):
                         cols = st.columns(cols_per_row)
                         for col_idx in range(cols_per_row):
@@ -590,180 +697,119 @@ def main():
                                 with cols[col_idx]:
                                     display_image_small(
                                         file_detail['desktop_image'],
-                                        f"Desktop: {file_detail['name']}\n{file_detail['desktop_size_kb']:.1f} KB",
+                                        f"Desktop: {file_detail['name']}\n{file_detail['desktop_size_kb']:.1f} KB\n{file_detail['desktop_dims'][0]} × {file_detail['desktop_dims'][1]}\nQuality: {file_detail['desktop_quality']}",
                                         width=preview_size
                                     )
 
+                # Mobile Results Tab (only if mobile enabled)
+                if enable_mobile:
+                    with tab2:
+                        st.write("**Mobile Compressed Images:**")
+                        
+                        for row in range(rows):
+                            cols = st.columns(cols_per_row)
+                            for col_idx in range(cols_per_row):
+                                file_idx = row * cols_per_row + col_idx
+                                if file_idx < len(successful_files):
+                                    file_detail = successful_files[file_idx]
+                                    with cols[col_idx]:
+                                        if 'mobile_image' in file_detail:
+                                            display_image_small(
+                                                file_detail['mobile_image'],
+                                                f"Mobile: {file_detail['name']}\n{file_detail['mobile_size_kb']:.1f} KB\n{file_detail['mobile_dims'][0]} × {file_detail['mobile_dims'][1]}",
+                                                width=preview_size
+                                            )
+
+                # Side-by-Side Comparison Tab
                 with tab3:
-                    st.write("**Before & After Comparison:**")
-
-                    # Show comparison for each successful file
-                    for file_detail in successful_files[:6]:  # Limit to first 6 for space
+                    st.write("**Before vs After Comparison (First 6 images):**")
+                    
+                    comparison_files = successful_files[:6]  # Limit to 6 for comparison
+                    
+                    for file_detail in comparison_files:
                         st.write(f"**{file_detail['name']}**")
-                        col1, col2, col3 = st.columns(3)
-
+                        
+                        if enable_mobile:
+                            col1, col2, col3 = st.columns(3)
+                        else:
+                            col1, col2 = st.columns(2)
+                        
                         with col1:
                             st.write("*Original*")
                             display_image_small(
                                 file_detail['image'],
-                                f"Original\n{file_detail['size_kb']:.1f} KB",
+                                f"Original: {file_detail['size_kb']:.1f} KB\n{file_detail['dimensions']}",
                                 width=preview_size
                             )
-
+                        
                         with col2:
-                            st.write("*Desktop WebP*")
+                            st.write("*Desktop Compressed*")
                             display_image_small(
                                 file_detail['desktop_image'],
-                                f"Desktop\n{file_detail['desktop_size_kb']:.1f} KB",
+                                f"Desktop: {file_detail['desktop_size_kb']:.1f} KB\n{file_detail['desktop_dims'][0]} × {file_detail['desktop_dims'][1]}\nReduction: {((file_detail['size_kb'] - file_detail['desktop_size_kb']) / file_detail['size_kb'] * 100):.1f}%",
                                 width=preview_size
                             )
-
-                        with col3:
-                            st.write("*Mobile WebP*")
-                            display_image_small(
-                                file_detail['mobile_image'],
-                                f"Mobile\n{file_detail['mobile_size_kb']:.1f} KB",
-                                width=preview_size
-                            )
-
-                        # Show compression stats
-                        desktop_reduction = ((file_detail['size_kb'] - file_detail['desktop_size_kb']) / file_detail['size_kb']) * 100
-                        mobile_reduction = ((file_detail['size_kb'] - file_detail['mobile_size_kb']) / file_detail['size_kb']) * 100
-                        st.caption(f"Reductions: Desktop {desktop_reduction:.1f}% | Mobile {mobile_reduction:.1f}%")
-                        st.markdown("---")
-
-                    if len(successful_files) > 6:
-                        st.info(f"Showing first 6 comparisons. Download ZIP to see all {len(successful_files)} processed images.")
-
-            # Detailed results table
-            with st.expander("📊 Detailed Results Table", expanded=False):
-                st.write("**Individual File Results:**")
-
-                # Create results table
-                results_data = []
-                for file_detail in file_details:
-                    if file_detail.get('success', False):
-                        desktop_reduction = ((file_detail['size_kb'] - file_detail['desktop_size_kb']) / file_detail['size_kb']) * 100
-                        mobile_reduction = ((file_detail['size_kb'] - file_detail['mobile_size_kb']) / file_detail['size_kb']) * 100
-
-                        results_data.append({
-                            'File': file_detail['name'],
-                            'Original (KB)': f"{file_detail['size_kb']:.1f}",
-                            'Desktop (KB)': f"{file_detail['desktop_size_kb']:.1f}",
-                            'Mobile (KB)': f"{file_detail['mobile_size_kb']:.1f}",
-                            'Desktop Reduction': f"{desktop_reduction:.1f}%",
-                            'Mobile Reduction': f"{mobile_reduction:.1f}%",
-                            'Quality': f"{file_detail['desktop_quality']}%",
-                            'Status': '✅ Success'
-                        })
-                    else:
-                        results_data.append({
-                            'File': file_detail['name'],
-                            'Original (KB)': f"{file_detail['size_kb']:.1f}",
-                            'Desktop (KB)': 'Failed',
-                            'Mobile (KB)': 'Failed',
-                            'Desktop Reduction': 'N/A',
-                            'Mobile Reduction': 'N/A',
-                            'Quality': 'N/A',
-                            'Status': f"❌ {file_detail.get('error', 'Unknown error')}"
-                        })
-
-                # Display as table
-                st.table(results_data)
-
-            # Download options
-            st.subheader("⬇️ Download Processed Images")
-
-            if processed_images:
-                # Create ZIP file
-                zip_data = create_zip_file(processed_images)
-
-                col1, col2, col3 = st.columns([2, 2, 1])
-
-                with col1:
-                    st.download_button(
-                        label="📥 Download All Images (ZIP)",
-                        data=zip_data,
-                        file_name=f"compressed_images_{len(processed_images)}_files.zip",
-                        mime="application/zip",
-                        help="Downloads all desktop and mobile versions in organized folders"
-                    )
-
-                with col2:
-                    st.write(f"**ZIP Contents:**")
-                    st.write(f"• desktop/ folder: {len(processed_images)} desktop versions")
-                    st.write(f"• mobile/ folder: {len(processed_images)} mobile versions")
-                    st.write(f"• Total files: {len(processed_images) * 2}")
-
-                with col3:
-                    zip_size_mb = len(zip_data) / (1024 * 1024)
-                    st.metric("ZIP Size", f"{zip_size_mb:.2f} MB")
-
-                # Individual download options
-                with st.expander("📁 Individual Downloads", expanded=False):
-                    for file_detail in file_details:
-                        if file_detail.get('success', False):
-                            st.write(f"**{file_detail['name']}**")
-                            col1, col2 = st.columns(2)
-
-                            with col1:
-                                desktop_filename = f"{os.path.splitext(file_detail['name'])[0]}_desktop.webp"
-                                st.download_button(
-                                    label="Desktop Version",
-                                    data=file_detail['desktop_compressed'],
-                                    file_name=desktop_filename,
-                                    mime="image/webp",
-                                    key=f"desktop_{file_detail['name']}"
-                                )
-
-                            with col2:
-                                mobile_filename = f"{os.path.splitext(file_detail['name'])[0]}_mobile.webp"
-                                st.download_button(
-                                    label="Mobile Version",
-                                    data=file_detail['mobile_compressed'],
-                                    file_name=mobile_filename,
-                                    mime="image/webp",
-                                    key=f"mobile_{file_detail['name']}"
-                                )
-
-            # Processing summary
-            st.subheader("ℹ️ Batch Processing Info")
-            processing_time = len(file_details) * 2  # Approximate processing time
-
-            st.info(f"""
-            **Batch Processing Summary:**
-            - Files processed: {successful_compressions}/{len(file_details)}
-            - Total size reduction: {((total_original_size - total_desktop_size) / total_original_size * 100):.1f}% (desktop)
-            - Average processing time: ~{processing_time} seconds
-            - Output format: WebP with transparency preservation
-            - Versions created: Desktop ({desktop_width}×{desktop_height} max) + Mobile ({mobile_width}px max width)
-
-            **WebP Benefits:**
-            - Superior compression compared to JPEG/PNG
-            - Supports transparency and animation  
-            - Widely supported by modern browsers
-            - Up to 35% smaller than PNG with transparency
-
-            **Preview Features:**
-            - Upload thumbnails for quick verification
-            - Before/after comparisons with size info
-            - Organized tabs for different result views
-            - Individual file comparisons available
-            """)
+                        
+                        if enable_mobile:
+                            with col3:
+                                st.write("*Mobile Compressed*")
+                                if 'mobile_image' in file_detail:
+                                    display_image_small(
+                                        file_detail['mobile_image'],
+                                        f"Mobile: {file_detail['mobile_size_kb']:.1f} KB\n{file_detail['mobile_dims'][0]} × {file_detail['mobile_dims'][1]}\nReduction: {((file_detail['size_kb'] - file_detail['mobile_size_kb']) / file_detail['size_kb'] * 100):.1f}%",
+                                        width=preview_size
+                                    )
 
     else:
         # Instructions when no files are uploaded
-        st.info("👆 Please upload one or more image files to get started!")
+        st.subheader("📋 Instructions")
+        
+        st.markdown("""
+        **How to use FastWebP:**
+        
+        1. **Upload images**: Use the file uploader above to select multiple image files
+        2. **Configure settings**: Use the sidebar to adjust compression and preview settings
+        3. **Choose compression mode**: 
+           - **Desktop only** (default): Creates optimized versions for desktop/web use
+           - **Mobile enabled**: Creates both desktop and mobile-optimized versions
+        4. **Process images**: Click "Compress All Images" to process all uploaded files
+        5. **Download results**: Choose from available download options based on your selected mode
+        
+        **Compression Modes:**
+        - **🖥️ Desktop Mode**: Creates high-quality compressed images suitable for desktop viewing
+        - **📱 Mobile Mode**: Additionally creates smaller, mobile-optimized versions for faster loading on mobile devices
+        
+        **Download Options:**
+        - **Batch downloads**: Download all images at once in ZIP format
+        - **Individual downloads**: Download each image separately with detailed compression stats
+        """)
 
-        with st.expander("📋 How to use batch processing with previews"):
+        with st.expander("🎯 Feature Highlights"):
             st.write("""
-            1. **Upload multiple images**: Use the file uploader above to select multiple images at once
-            2. **Preview uploaded images**: See thumbnail previews of all uploaded files
-            3. **Review upload summary**: Check the file details and statistics  
-            4. **Adjust settings**: Use the sidebar to customize compression and preview settings
-            5. **Process batch**: Click "Compress All Images" to process all files
-            6. **View results**: See before/after previews in organized tabs
-            7. **Download results**: Get a ZIP file with all compressed versions
+            **Key Features:**
+            - ✅ **Batch processing** of multiple images
+            - ✅ **WebP conversion** for optimal file sizes
+            - ✅ **Transparency preservation** for PNG files
+            - ✅ **Responsive sizing** for desktop and mobile
+            - ✅ **Quality optimization** to meet target file sizes
+            - ✅ **Before/after previews** with compression statistics
+            - ✅ **Flexible download options** based on your needs
+            - ✅ **Individual image downloads** with detailed stats
+            
+            **Supported Formats:**
+            - Input: PNG, JPG, JPEG, BMP, TIFF, WebP
+            - Output: WebP (optimized for web use)
+            """)
+
+        with st.expander("📖 How to Use Batch Processing"):
+            st.write("""
+            **Batch Processing Workflow:**
+            1. **Select multiple files**: Upload 1-50 images at once
+            2. **Review upload summary**: Check the file details and statistics  
+            3. **Adjust settings**: Use the sidebar to customize compression and preview settings
+            4. **Process batch**: Click "Compress All Images" to process all files
+            5. **View results**: See before/after previews in organized tabs
+            6. **Download results**: Choose from batch or individual download options
 
             **Preview Features:**
             - ✅ **Thumbnail previews** of uploaded images
