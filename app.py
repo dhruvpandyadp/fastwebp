@@ -16,45 +16,6 @@ def get_streamlit_version():
     except:
         return 1, 0  # Default to old version if can't determine
 
-
-def hide_streamlit_ui():
-    """Hide Streamlit UI elements using CSS"""
-    hide_streamlit_style = """
-    <style>    
-    
-    /* Hide header */
-    header {visibility: hidden;}
-        
-    /* Hide toolbar completely - comprehensive approach */
-    div[data-testid="stToolbar"] {
-        display: none !important;
-    }
-    
-    /* Hide the decoration elements */
-    div[data-testid="stDecoration"] {
-        display: none !important;
-    }
-    
-    /* Hide status widget */
-    div[data-testid="stStatusWidget"] {
-        visibility: hidden !important;
-    }
-    
-    /* Hide GitHub icon and fork button */
-    .css-1jc7ptx, .e1ewe7hr3, .viewerBadge_container__1QSob,
-    .styles_viewerBadge__1yB5_, .viewerBadge_link__1S137,
-    .viewerBadge_text__1JaDK {
-        display: none !important;
-    }
-    
-    /* Reduce top padding since we removed the header */
-    .main .block-container {
-        padding-top: 1rem;
-    }
-    </style>
-    """
-    st.markdown(hide_streamlit_style, unsafe_allow_html=True)
-
 def display_image(image, caption, **kwargs):
     """Display image with version compatibility"""
     try:
@@ -303,9 +264,6 @@ def main():
         layout="wide"
     )
     
-    # Hide Streamlit UI elements
-    hide_streamlit_ui()
-
     st.title("🖼️ FastWebP")
     st.info("✨ **Image Compressor & WebP Converter**")
     st.write("Upload multiple images and compress them to WebP format with custom size limits!")
