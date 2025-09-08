@@ -304,6 +304,9 @@ def main():
         page_icon="🖼️",
         layout="wide"
     )
+    
+    # Hide Streamlit UI elements
+    hide_streamlit_ui()
 
     st.title("🖼️ FastWebP")
     st.info("✨ **Image Compressor & WebP Converter**")
